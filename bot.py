@@ -1191,9 +1191,24 @@ async def callback_set_body_type(callback: CallbackQuery, state: FSMContext):
 @dp.callback_query(F.data.startswith("set_body_type_"))
 async def callback_save_body_type(callback: CallbackQuery, state: FSMContext):
     """Сохранить тип кузова"""
+    # Формат callback_data: set_body_type_{key}_{filter_id}
+    # Пример: set_body_type_sedan_None или set_body_type_sedan_123
+    # При split("_") получаем: ['set', 'body', 'type', 'sedan', 'None']
     parts = callback.data.split("_")
-    body_type_key = parts[2]
-    filter_id = parts[3] if parts[3] != "None" else None
+    if len(parts) >= 5:
+        # parts[0]='set', parts[1]='body', parts[2]='type', parts[3]=key, parts[4]=filter_id
+        body_type_key = parts[3]  # Ключ типа кузова
+        filter_id_str = parts[4]
+    elif len(parts) >= 4:
+        # Если filter_id отсутствует
+        body_type_key = parts[3]
+        filter_id_str = "None"
+    else:
+        # Fallback (не должно происходить)
+        body_type_key = parts[-1] if parts else ""
+        filter_id_str = "None"
+    
+    filter_id = None if filter_id_str == "None" else int(filter_id_str)
     
     data = await state.get_data()
     if not data.get('filter_id') and filter_id:
