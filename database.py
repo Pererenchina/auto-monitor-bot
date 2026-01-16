@@ -23,6 +23,7 @@ class UserFilter(Base):
     price_to_usd = Column(Float, nullable=True)  # Цена до (USD)
     transmission = Column(String(20), nullable=True)  # Автомат/Механика
     engine_type = Column(String(20), nullable=True)  # Бензин/Дизель/Электро
+    body_type = Column(String(50), nullable=True)  # Тип кузова (седан, хэтчбек, универсал, внедорожник и т.д.)
     is_active = Column(Boolean, default=True)  # Активен ли фильтр
     created_at = Column(DateTime, default=datetime.utcnow)
     
@@ -49,6 +50,7 @@ class FoundCar(Base):
     image_url = Column(Text, nullable=True)  # Ссылка на фото
     transmission = Column(String(20), nullable=True)  # Коробка передач
     engine_type = Column(String(20), nullable=True)  # Тип двигателя
+    body_type = Column(String(50), nullable=True)  # Тип кузова
     notified = Column(Boolean, default=False)  # Отправлено ли уведомление
     found_at = Column(DateTime, default=datetime.utcnow)
     

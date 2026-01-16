@@ -323,6 +323,13 @@ class KufarParser(BaseParser):
                 elif 'электро' in fuel_lower or 'electric' in fuel_lower or 'электр' in fuel_lower:
                     engine_type = 'Электро'
             
+            # Тип кузова - извлекаем из параметров или текста
+            body_type = params.get('body_type') or params.get('кузов') or params.get('body') or ad.get('body_type')
+            if not body_type:
+                # Пробуем извлечь из текста объявления
+                full_text = f"{title} {ad.get('description', '')} {ad.get('ad_text', '')}"
+                body_type = self.extract_body_type(full_text, params)
+            
             # URL - пробуем разные варианты полей
             url = ad.get('ad_link') or ad.get('link') or ad.get('url') or ad.get('ad_url')
             if not url:
@@ -347,6 +354,7 @@ class KufarParser(BaseParser):
                 'image_url': image_url,
                 'transmission': transmission,
                 'engine_type': engine_type,
+                'body_type': body_type,
             }
         except Exception as e:
             logger.error(f"Ошибка при парсинге объявления kufar.by: {e}", exc_info=True)

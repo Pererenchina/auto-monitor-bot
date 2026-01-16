@@ -359,6 +359,9 @@ class AbwParser(BaseParser):
             elif 'электро' in full_text.lower() or 'электр' in full_text.lower():
                 engine_type = 'Электро'
             
+            # Тип кузова - извлекаем из текста
+            body_type = self.extract_body_type(full_text)
+            
             # Фото
             image_url = None
             img_elem = ad_element.find('img')
@@ -426,6 +429,7 @@ class AbwParser(BaseParser):
                 'image_url': image_url,
                 'transmission': transmission,
                 'engine_type': engine_type,
+                'body_type': body_type,
             }
         except Exception as e:
             logger.error(f"Ошибка при парсинге объявления abw.by: {e}", exc_info=True)

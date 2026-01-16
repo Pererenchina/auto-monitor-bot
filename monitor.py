@@ -60,6 +60,7 @@ class MonitorService:
                 'price_to_usd': user_filter.price_to_usd,
                 'transmission': user_filter.transmission,
                 'engine_type': user_filter.engine_type,
+                'body_type': user_filter.body_type,
             }
             
             # Удаляем None значения
@@ -113,7 +114,7 @@ class MonitorService:
                             car_data = {k: v for k, v in car.items() 
                                        if k in ['source', 'ad_id', 'title', 'price_usd', 'price_byn', 
                                                'year', 'mileage', 'engine_volume', 'city', 'url', 
-                                               'image_url', 'transmission', 'engine_type']}
+                                               'image_url', 'transmission', 'engine_type', 'body_type']}
                             
                             # Сохраняем новое объявление
                             found_car = await self.db_manager.add_found_car(

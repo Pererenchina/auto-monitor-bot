@@ -98,6 +98,22 @@ BRANDS: List[Tuple[str, str]] = [
     ("changan", "Changan"),
 ]
 
+# Типы кузовов автомобилей
+BODY_TYPES: List[Tuple[str, str]] = [
+    ("sedan", "Седан"),
+    ("hatchback", "Хэтчбек"),
+    ("universal", "Универсал"),
+    ("suv", "Внедорожник"),
+    ("crossover", "Кроссовер"),
+    ("coupe", "Купе"),
+    ("cabriolet", "Кабриолет"),
+    ("minivan", "Минивэн"),
+    ("van", "Фургон"),
+    ("pickup", "Пикап"),
+    ("liftback", "Лифтбек"),
+    ("wagon", "Универсал"),
+]
+
 BRAND_MODELS: Dict[str, List[str]] = {
     # BMW
     "bmw": ["1 Series", "2 Series", "3 Series", "4 Series", "5 Series", "6 Series", "7 Series", "8 Series", 
@@ -182,6 +198,7 @@ class FilterStates(StatesGroup):
     waiting_price_to = State()
     waiting_transmission = State()
     waiting_engine_type = State()
+    waiting_body_type = State()
 
 
 def get_filter_keyboard(filter_id: Optional[int] = None) -> InlineKeyboardMarkup:
@@ -195,10 +212,15 @@ def get_filter_keyboard(filter_id: Optional[int] = None) -> InlineKeyboardMarkup
          InlineKeyboardButton(text="💰 Цена до (USD)", callback_data=f"filter_price_to_{filter_id}")],
         [InlineKeyboardButton(text="⚙️ Коробка передач", callback_data=f"filter_transmission_{filter_id}"),
          InlineKeyboardButton(text="⛽ Тип двигателя", callback_data=f"filter_engine_type_{filter_id}")],
+        [InlineKeyboardButton(text="🚙 Тип кузова", callback_data=f"filter_body_type_{filter_id}")],
         [InlineKeyboardButton(text="✅ Сохранить фильтр", callback_data=f"save_filter_{filter_id}"),
          InlineKeyboardButton(text="❌ Удалить фильтр", callback_data=f"delete_filter_{filter_id}")],
-        [InlineKeyboardButton(text="🔙 Назад", callback_data="back_to_menu")]
     ]
+    # Кнопка "Назад" - возвращает к редактированию фильтра или к созданию нового
+    if filter_id is not None:
+        buttons.append([InlineKeyboardButton(text="🔙 Назад", callback_data=f"edit_filter_{filter_id}")])
+    else:
+        buttons.append([InlineKeyboardButton(text="🔙 Назад", callback_data="add_filter")])
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 
@@ -218,7 +240,11 @@ def get_brand_keyboard(filter_id: Optional[int] = None) -> InlineKeyboardMarkup:
             callback_data=f"input_brand_{filter_id}"
         )
     ])
-    back_cb = f"edit_filter_{filter_id}" if filter_id is not None else "back_to_menu"
+    # Кнопка "Назад" - возвращает к редактированию фильтра или к созданию нового
+    if filter_id is not None:
+        back_cb = f"edit_filter_{filter_id}"
+    else:
+        back_cb = "add_filter"
     kb_buttons.append([InlineKeyboardButton(text="🔙 Назад", callback_data=back_cb)])
     return InlineKeyboardMarkup(inline_keyboard=kb_buttons)
 
@@ -248,7 +274,11 @@ def get_model_keyboard(brand_key: str, filter_id: Optional[int] = None) -> Inlin
             callback_data=f"input_model_{filter_id}"
         )
     ])
-    back_cb = f"edit_filter_{filter_id}" if filter_id is not None else "back_to_menu"
+    # Кнопка "Назад" - возвращает к редактированию фильтра или к созданию нового
+    if filter_id is not None:
+        back_cb = f"edit_filter_{filter_id}"
+    else:
+        back_cb = "add_filter"
     kb_buttons.append([InlineKeyboardButton(text="🔙 Назад", callback_data=back_cb)])
     return InlineKeyboardMarkup(inline_keyboard=kb_buttons)
 
@@ -271,8 +301,12 @@ def get_transmission_keyboard(filter_id: Optional[int] = None) -> InlineKeyboard
     buttons = [
         [InlineKeyboardButton(text="Автомат", callback_data=f"set_transmission_Автомат_{filter_id}")],
         [InlineKeyboardButton(text="Механика", callback_data=f"set_transmission_Механика_{filter_id}")],
-        [InlineKeyboardButton(text="🔙 Назад", callback_data=f"edit_filter_{filter_id}")]
     ]
+    # Кнопка "Назад" - возвращает к редактированию фильтра или к созданию нового
+    if filter_id is not None:
+        buttons.append([InlineKeyboardButton(text="🔙 Назад", callback_data=f"edit_filter_{filter_id}")])
+    else:
+        buttons.append([InlineKeyboardButton(text="🔙 Назад", callback_data="add_filter")])
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 
@@ -282,8 +316,34 @@ def get_engine_type_keyboard(filter_id: Optional[int] = None) -> InlineKeyboardM
         [InlineKeyboardButton(text="Бензин", callback_data=f"set_engine_Бензин_{filter_id}")],
         [InlineKeyboardButton(text="Дизель", callback_data=f"set_engine_Дизель_{filter_id}")],
         [InlineKeyboardButton(text="Электро", callback_data=f"set_engine_Электро_{filter_id}")],
-        [InlineKeyboardButton(text="🔙 Назад", callback_data=f"edit_filter_{filter_id}")]
     ]
+    # Кнопка "Назад" - возвращает к редактированию фильтра или к созданию нового
+    if filter_id is not None:
+        buttons.append([InlineKeyboardButton(text="🔙 Назад", callback_data=f"edit_filter_{filter_id}")])
+    else:
+        buttons.append([InlineKeyboardButton(text="🔙 Назад", callback_data="add_filter")])
+    return InlineKeyboardMarkup(inline_keyboard=buttons)
+
+
+def get_body_type_keyboard(filter_id: Optional[int] = None) -> InlineKeyboardMarkup:
+    """Клавиатура выбора типа кузова"""
+    buttons: List[List[InlineKeyboardButton]] = []
+    # Группируем по 2 кнопки в ряд для компактности
+    for i in range(0, len(BODY_TYPES), 2):
+        row = []
+        key1, title1 = BODY_TYPES[i]
+        row.append(InlineKeyboardButton(
+            text=title1,
+            callback_data=f"set_body_type_{key1}_{filter_id}"
+        ))
+        if i + 1 < len(BODY_TYPES):
+            key2, title2 = BODY_TYPES[i + 1]
+            row.append(InlineKeyboardButton(
+                text=title2,
+                callback_data=f"set_body_type_{key2}_{filter_id}"
+            ))
+        buttons.append(row)
+    buttons.append([InlineKeyboardButton(text="🔙 Назад", callback_data=f"edit_filter_{filter_id}")])
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 
@@ -304,7 +364,11 @@ def get_year_from_keyboard(filter_id: Optional[int] = None) -> InlineKeyboardMar
             callback_data=f"input_year_from_{filter_id}"
         )
     ])
-    back_cb = f"edit_filter_{filter_id}" if filter_id is not None else "back_to_menu"
+    # Кнопка "Назад" - возвращает к редактированию фильтра или к созданию нового
+    if filter_id is not None:
+        back_cb = f"edit_filter_{filter_id}"
+    else:
+        back_cb = "add_filter"
     buttons.append([InlineKeyboardButton(text="🔙 Назад", callback_data=back_cb)])
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
@@ -326,7 +390,11 @@ def get_year_to_keyboard(filter_id: Optional[int] = None) -> InlineKeyboardMarku
             callback_data=f"input_year_to_{filter_id}"
         )
     ])
-    back_cb = f"edit_filter_{filter_id}" if filter_id is not None else "back_to_menu"
+    # Кнопка "Назад" - возвращает к редактированию фильтра или к созданию нового
+    if filter_id is not None:
+        back_cb = f"edit_filter_{filter_id}"
+    else:
+        back_cb = "add_filter"
     buttons.append([InlineKeyboardButton(text="🔙 Назад", callback_data=back_cb)])
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
@@ -348,7 +416,11 @@ def get_price_from_keyboard(filter_id: Optional[int] = None) -> InlineKeyboardMa
             callback_data=f"input_price_from_{filter_id}"
         )
     ])
-    back_cb = f"edit_filter_{filter_id}" if filter_id is not None else "back_to_menu"
+    # Кнопка "Назад" - возвращает к редактированию фильтра или к созданию нового
+    if filter_id is not None:
+        back_cb = f"edit_filter_{filter_id}"
+    else:
+        back_cb = "add_filter"
     buttons.append([InlineKeyboardButton(text="🔙 Назад", callback_data=back_cb)])
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
@@ -370,7 +442,11 @@ def get_price_to_keyboard(filter_id: Optional[int] = None) -> InlineKeyboardMark
             callback_data=f"input_price_to_{filter_id}"
         )
     ])
-    back_cb = f"edit_filter_{filter_id}" if filter_id is not None else "back_to_menu"
+    # Кнопка "Назад" - возвращает к редактированию фильтра или к созданию нового
+    if filter_id is not None:
+        back_cb = f"edit_filter_{filter_id}"
+    else:
+        back_cb = "add_filter"
     buttons.append([InlineKeyboardButton(text="🔙 Назад", callback_data=back_cb)])
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
@@ -414,6 +490,14 @@ def format_filter_text(f: 'UserFilter') -> str:
         text += f"⛽ Двигатель: {f.engine_type}\n"
     else:
         text += "⛽ Двигатель: любой\n"
+    
+    # Тип кузова
+    if f.body_type:
+        # Находим название типа кузова по ключу
+        body_type_name = next((title for key, title in BODY_TYPES if key == f.body_type), f.body_type)
+        text += f"🚙 Кузов: {body_type_name}\n"
+    else:
+        text += "🚙 Кузов: любой\n"
     
     # Статус
     status = "✅ Активен" if f.is_active else "❌ Неактивен"
@@ -601,22 +685,19 @@ async def callback_help(callback: CallbackQuery):
 
 @dp.callback_query(F.data == "add_filter")
 async def callback_add_filter(callback: CallbackQuery, state: FSMContext):
-    """Добавить новый фильтр"""
-    await state.clear()
-    await callback.message.edit_text(
-        "🔍 Создание нового фильтра\n\n"
-        "Выберите параметр для настройки:",
-        reply_markup=get_filter_keyboard(None)
-    )
-    await callback.answer()
-    """Добавить новый фильтр"""
-    await state.update_data(filter_id=None)
-    await callback.message.edit_text(
-        "🔍 Настройте параметры фильтра:\n\n"
-        "Выберите параметр для настройки:",
-        reply_markup=get_filter_keyboard()
-    )
-    await callback.answer()
+    """Обработчик создания нового фильтра (возврат к меню создания)"""
+    try:
+        await state.clear()
+        await state.update_data(filter_id=None)
+        await callback.message.edit_text(
+            "🔍 Настройте параметры фильтра:\n\n"
+            "Выберите параметр для настройки:",
+            reply_markup=get_filter_keyboard(None)
+        )
+        await callback.answer()
+    except Exception as e:
+        print(f"Ошибка в callback_add_filter: {e}")
+        await callback.answer("❌ Произошла ошибка. Попробуйте позже.", show_alert=True)
 
 
 @dp.callback_query(F.data.startswith("edit_filter_"))
@@ -644,6 +725,7 @@ async def callback_edit_filter(callback: CallbackQuery, state: FSMContext):
             price_to_usd=filter_obj.price_to_usd,
             transmission=filter_obj.transmission,
             engine_type=filter_obj.engine_type,
+            body_type=filter_obj.body_type,
         )
         
         # Используем функцию форматирования для единообразия
@@ -1093,6 +1175,39 @@ async def callback_save_engine_type(callback: CallbackQuery, state: FSMContext):
     await callback.answer()
 
 
+@dp.callback_query(F.data.startswith("filter_body_type_"))
+async def callback_set_body_type(callback: CallbackQuery, state: FSMContext):
+    """Установить тип кузова"""
+    filter_id = callback.data.split("_")[-1]
+    if filter_id == "None":
+        filter_id = None
+    else:
+        filter_id = int(filter_id)
+    
+    await callback.message.edit_text("Выберите тип кузова:", reply_markup=get_body_type_keyboard(filter_id))
+    await callback.answer()
+
+
+@dp.callback_query(F.data.startswith("set_body_type_"))
+async def callback_save_body_type(callback: CallbackQuery, state: FSMContext):
+    """Сохранить тип кузова"""
+    parts = callback.data.split("_")
+    body_type_key = parts[2]
+    filter_id = parts[3] if parts[3] != "None" else None
+    
+    data = await state.get_data()
+    if not data.get('filter_id') and filter_id:
+        data['filter_id'] = filter_id
+    
+    data['body_type'] = body_type_key
+    await state.update_data(**data)
+    
+    # Находим название типа кузова
+    body_type_name = next((title for key, title in BODY_TYPES if key == body_type_key), body_type_key)
+    await callback.message.edit_text(f"✅ Тип кузова установлен: {body_type_name}", reply_markup=get_filter_keyboard(data.get('filter_id')))
+    await callback.answer()
+
+
 @dp.callback_query(F.data.startswith("save_filter_"))
 async def callback_save_filter(callback: CallbackQuery, state: FSMContext):
     """Сохранить фильтр"""
@@ -1109,6 +1224,7 @@ async def callback_save_filter(callback: CallbackQuery, state: FSMContext):
             'price_to_usd': data.get('price_to_usd'),
             'transmission': data.get('transmission'),
             'engine_type': data.get('engine_type'),
+            'body_type': data.get('body_type'),
         }
         
         # Удаляем None значения

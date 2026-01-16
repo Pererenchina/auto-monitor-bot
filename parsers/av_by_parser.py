@@ -464,6 +464,20 @@ class AvByParser(BaseParser):
                     elif 'электро' in fuel_lower or 'electric' in fuel_lower:
                         engine_type = 'Электро'
             
+            # Тип кузова - извлекаем из properties
+            body_type = None
+            for prop in properties:
+                if isinstance(prop, dict):
+                    prop_name = prop.get('name', '').lower()
+                    if prop_name in ['body_type', 'bodytype', 'кузов', 'body']:
+                        body_type = self.extract_body_type(str(prop.get('value', '')), properties)
+                        break
+            
+            # Если не нашли в properties, пробуем из текста
+            if not body_type:
+                full_text = f"{title} {ad.get('description', '')}"
+                body_type = self.extract_body_type(full_text, ad)
+            
             # URL - пробуем извлечь из данных, иначе формируем
             url = ad.get('publicUrl') or ad.get('url') or ad.get('link')
             if not url:
@@ -488,6 +502,7 @@ class AvByParser(BaseParser):
                 'image_url': image_url,
                 'transmission': transmission,
                 'engine_type': engine_type,
+                'body_type': body_type,
             }
         except Exception as e:
             logger.error(f"Ошибка при парсинге объявления av.by: {e}", exc_info=True)

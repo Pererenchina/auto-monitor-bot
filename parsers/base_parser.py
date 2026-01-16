@@ -62,6 +62,46 @@ class BaseParser(ABC):
         except ValueError:
             return None
     
+    def extract_body_type(self, text: str, properties: Optional[Dict] = None) -> Optional[str]:
+        """Извлечение типа кузова из текста или свойств"""
+        if not text:
+            text = ''
+        text_lower = text.lower()
+        
+        # Маппинг ключевых слов на типы кузовов
+        body_keywords = {
+            'sedan': ['седан', 'sedan'],
+            'hatchback': ['хэтчбек', 'hatchback', 'хетчбек', 'хетч'],
+            'universal': ['универсал', 'universal', 'wagon', 'вагон'],
+            'wagon': ['универсал', 'universal', 'wagon', 'вагон'],
+            'suv': ['внедорожник', 'suv', 'джип', 'jeep', 'внедорожн'],
+            'crossover': ['кроссовер', 'crossover', 'кросс'],
+            'coupe': ['купе', 'coupe'],
+            'cabriolet': ['кабриолет', 'cabriolet', 'convertible', 'конвертируемый'],
+            'minivan': ['минивэн', 'minivan', 'микроавтобус', 'минивен'],
+            'van': ['фургон', 'van', 'микроавтобус'],
+            'pickup': ['пикап', 'pickup'],
+            'liftback': ['лифтбек', 'liftback'],
+        }
+        
+        # Проверяем свойства (если переданы)
+        if properties:
+            if isinstance(properties, dict):
+                # Ищем в разных полях
+                body_field = properties.get('body_type') or properties.get('bodyType') or properties.get('кузов') or properties.get('body')
+                if body_field:
+                    body_str = str(body_field).lower()
+                    for body_type, keywords in body_keywords.items():
+                        if any(kw in body_str for kw in keywords):
+                            return body_type
+        
+        # Ищем в тексте
+        for body_type, keywords in body_keywords.items():
+            if any(kw in text_lower for kw in keywords):
+                return body_type
+        
+        return None
+    
     def matches_filters(self, car: Dict, filters: Dict) -> bool:
         """Проверка соответствия автомобиля фильтрам"""
         # Если фильтров нет, пропускаем все
@@ -196,6 +236,35 @@ class BaseParser(ABC):
             filter_engine = filters['engine_type'].lower()
             car_engine = car['engine_type'].lower()
             if filter_engine not in car_engine:
+                return False
+        
+        # Проверка типа кузова
+        if filters.get('body_type') and car.get('body_type'):
+            filter_body = filters['body_type'].lower().strip()
+            car_body = str(car.get('body_type', '')).lower().strip()
+            
+            # Маппинг для разных вариантов написания
+            body_type_mapping = {
+                'sedan': ['седан', 'sedan'],
+                'hatchback': ['хэтчбек', 'hatchback', 'хетчбек'],
+                'universal': ['универсал', 'universal', 'wagon', 'вагон'],
+                'wagon': ['универсал', 'universal', 'wagon', 'вагон'],
+                'suv': ['внедорожник', 'suv', 'джип'],
+                'crossover': ['кроссовер', 'crossover'],
+                'coupe': ['купе', 'coupe'],
+                'cabriolet': ['кабриолет', 'cabriolet', 'convertible', 'конвертируемый'],
+                'minivan': ['минивэн', 'minivan', 'микроавтобус'],
+                'van': ['фургон', 'van', 'микроавтобус'],
+                'pickup': ['пикап', 'pickup'],
+                'liftback': ['лифтбек', 'liftback'],
+            }
+            
+            # Получаем варианты для фильтра
+            filter_variants = body_type_mapping.get(filter_body, [filter_body])
+            
+            # Проверяем совпадение
+            if not any(variant in car_body for variant in filter_variants):
+                logger.debug(f"Фильтр по типу кузова не пройден: car_body='{car_body}' != filter_body='{filter_body}'")
                 return False
         
         return True
