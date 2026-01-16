@@ -10,8 +10,33 @@ logger = logging.getLogger(__name__)
 # Используем тот же токен, что и в основном боте.
 import os
 from dotenv import load_dotenv
+from pathlib import Path
 
-load_dotenv()
+# Загружаем .env из корневой директории проекта
+env_path = Path(__file__).parent / '.env'
+if env_path.exists():
+    # Пробуем загрузить через dotenv
+    load_dotenv(dotenv_path=env_path)
+    # Если не загрузилось, читаем файл напрямую
+    BOT_TOKEN = os.getenv("BOT_TOKEN")
+    if not BOT_TOKEN:
+        try:
+            with open(env_path, 'r', encoding='utf-8-sig') as f:  # utf-8-sig автоматически удаляет BOM
+                for line in f:
+                    line = line.strip()
+                    if line and not line.startswith('#') and '=' in line:
+                        key, value = line.split('=', 1)
+                        key = key.strip()
+                        value = value.strip().strip('"').strip("'")
+                        if key == 'BOT_TOKEN':
+                            BOT_TOKEN = value
+                            os.environ['BOT_TOKEN'] = value
+                            break
+        except Exception as e:
+            pass
+else:
+    load_dotenv()
+
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 if not BOT_TOKEN:
     raise ValueError("BOT_TOKEN не найден в переменных окружения. Создайте файл .env с BOT_TOKEN=your_token")
