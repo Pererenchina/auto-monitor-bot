@@ -116,30 +116,41 @@ async def send_notification(user_id: int, car_data: Dict):
     price_usd = None
     price_byn = None
     
-    # Извлекаем цены
+    # Извлекаем цены и нормализуем их
     if car_data.get('price_usd'):
         try:
             price_usd = float(car_data['price_usd'])
+            # Проверка на разумность: если цена больше 1 миллиона USD, вероятно ошибка парсинга
+            if price_usd > 1000000:
+                logger.warning(f"Подозрительно большая цена USD: {price_usd}, пропускаем")
+                price_usd = None
         except (ValueError, TypeError):
             pass
     
     if car_data.get('price_byn'):
         try:
             price_byn = float(car_data['price_byn'])
+            # Проверка на разумность: если цена больше 10 миллионов BYN, вероятно ошибка парсинга
+            if price_byn > 10000000:
+                logger.warning(f"Подозрительно большая цена BYN: {price_byn}, пропускаем")
+                price_byn = None
         except (ValueError, TypeError):
             pass
     
     # Конвертация валют, если одна из цен отсутствует (примерный курс: 1 USD = 3.3 BYN)
+    # Но только если обе цены разумные
     if price_usd and not price_byn:
-        price_byn = price_usd * 3.3
+        if price_usd < 1000000:  # Только если цена разумная
+            price_byn = round(price_usd * 3.3, 0)
     elif price_byn and not price_usd:
-        price_usd = price_byn / 3.3
+        if price_byn < 10000000:  # Только если цена разумная
+            price_usd = round(price_byn / 3.3, 0)
     
-    # Форматируем и добавляем цены
-    if price_usd:
-        price_parts.append(f"<b>${price_usd:,.0f}</b>")
-    if price_byn:
-        price_parts.append(f"{price_byn:,.0f} BYN")
+    # Форматируем и добавляем цены (используем пробелы как разделители тысяч для читаемости)
+    if price_usd and price_usd < 1000000:
+        price_parts.append(f"<b>${price_usd:,.0f}</b>".replace(',', ' '))
+    if price_byn and price_byn < 10000000:
+        price_parts.append(f"{price_byn:,.0f} BYN".replace(',', ' '))
     
     if price_parts:
         text += f"💰 {' '.join(price_parts)}\n\n"

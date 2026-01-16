@@ -221,23 +221,54 @@ class KufarParser(BaseParser):
                         try:
                             # Пробуем извлечь числовое значение
                             if param_text:
-                                # Убираем все кроме цифр и точки
-                                price_str = ''.join(c for c in str(param_text) if c.isdigit() or c == '.' or c == ',')
-                                price_str = price_str.replace(',', '.')
+                                param_text_str = str(param_text)
+                                # Убираем все кроме цифр, точки, запятой и пробелов (для разделителей тысяч)
+                                price_str = ''.join(c for c in param_text_str if c.isdigit() or c == '.' or c == ',' or c == ' ' or c == '\xa0')
+                                # Убираем пробелы и неразрывные пробелы (разделители тысяч)
+                                price_str = price_str.replace(' ', '').replace('\xa0', '')
+                                
+                                # Обрабатываем запятую и точку
+                                if '.' in price_str and ',' in price_str:
+                                    # Если есть и точка и запятая, определяем что есть что
+                                    dot_pos = price_str.rindex('.')
+                                    comma_pos = price_str.rindex(',')
+                                    if dot_pos > comma_pos:
+                                        # Точка - десятичный разделитель, запятая - разделитель тысяч
+                                        price_str = price_str.replace(',', '')
+                                    else:
+                                        # Запятая - десятичный разделитель, точка - разделитель тысяч
+                                        price_str = price_str.replace('.', '').replace(',', '.')
+                                elif ',' in price_str:
+                                    # Если только запятая, проверяем позицию
+                                    comma_pos = price_str.rindex(',')
+                                    digits_after = len(price_str) - comma_pos - 1
+                                    if digits_after > 3:
+                                        # Если после запятой больше 3 цифр, это разделитель тысяч
+                                        price_str = price_str.replace(',', '')
+                                    else:
+                                        # Иначе это десятичный разделитель
+                                        price_str = price_str.replace(',', '.')
+                                elif '.' in price_str:
+                                    # Если только точка, проверяем позицию
+                                    dot_pos = price_str.rindex('.')
+                                    digits_after = len(price_str) - dot_pos - 1
+                                    if digits_after > 3:
+                                        # Если после точки больше 3 цифр, это разделитель тысяч
+                                        price_str = price_str.replace('.', '')
+                                    # Иначе это десятичный разделитель, оставляем как есть
+                                
                                 if price_str:
                                     price_val = float(price_str)
                                     # Определяем валюту по метке или контексту
-                                    if 'usd' in param_label or '$' in str(param_text) or param_code == 'price_usd':
+                                    param_text_lower = param_text_str.lower()
+                                    if 'usd' in param_label or '$' in param_text_lower or 'долл' in param_text_lower or param_code == 'price_usd':
                                         price_usd = price_val
-                                    elif 'byn' in param_label or 'р.' in str(param_text) or param_code == 'price_byn':
+                                    elif 'byn' in param_label or 'р.' in param_text_lower or 'бел' in param_text_lower or 'руб' in param_text_lower or param_code == 'price_byn':
                                         price_byn = price_val
-                                    # Если валюта не определена, пробуем по значению (обычно USD для больших чисел)
-                                    elif not price_usd and not price_byn:
-                                        if price_val > 1000:  # Вероятно USD
-                                            price_usd = price_val
-                                        else:
-                                            price_byn = price_val
-                        except (ValueError, TypeError):
+                                    # Если валюта не определена, НЕ делаем предположений - оставляем None
+                                    # Это предотвращает неправильную интерпретацию цен в BYN как USD
+                        except (ValueError, TypeError) as e:
+                            logger.debug(f"Ошибка парсинга цены из kufar.by: {e}, param_text={param_text}")
                             pass
             
             # Если не нашли в ad_parameters, пробуем из price
@@ -273,10 +304,36 @@ class KufarParser(BaseParser):
                     price_byn = None
             
             # Конвертация валют, если одна из цен отсутствует (примерный курс: 1 USD = 3.3 BYN)
+            # Но только если цены разумные (проверка на ошибки парсинга)
             if price_usd and not price_byn:
-                price_byn = price_usd * 3.3
+                if price_usd < 1000000:  # Проверка на разумность (максимум 1 млн USD)
+                    price_byn = round(price_usd * 3.3, 0)
+                else:
+                    logger.warning(f"kufar.by: Подозрительно большая цена USD: {price_usd}, пропускаем конвертацию")
+                    price_usd = None
             elif price_byn and not price_usd:
-                price_usd = price_byn / 3.3
+                if price_byn < 10000000:  # Проверка на разумность (максимум 10 млн BYN)
+                    price_usd = round(price_byn / 3.3, 0)
+                else:
+                    logger.warning(f"kufar.by: Подозрительно большая цена BYN: {price_byn}, пропускаем конвертацию")
+                    price_byn = None
+            
+            # Дополнительная проверка: если обе цены есть, но они несоответствуют курсу - исправляем
+            if price_usd and price_byn:
+                expected_byn = price_usd * 3.3
+                expected_usd = price_byn / 3.3
+                # Если разница больше 50%, вероятно ошибка парсинга
+                if abs(price_byn - expected_byn) / max(expected_byn, 1) > 0.5:
+                    logger.warning(f"kufar.by: Несоответствие цен: USD={price_usd}, BYN={price_byn}, ожидалось BYN={expected_byn:.0f}")
+                    # Оставляем ту цену, которая более вероятна
+                    if price_byn < 10000000:  # Если BYN разумная, используем её
+                        price_usd = round(price_byn / 3.3, 0)
+                    elif price_usd < 1000000:  # Если USD разумная, используем её
+                        price_byn = round(price_usd * 3.3, 0)
+                    else:
+                        # Обе цены подозрительные, сбрасываем
+                        price_usd = None
+                        price_byn = None
             
             # Пробег - пробуем разные ключи
             mileage = params.get('mileage') or params.get('пробег') or params.get('odometer') or ad.get('mileage')
