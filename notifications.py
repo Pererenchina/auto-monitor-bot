@@ -1,0 +1,158 @@
+"""
+Модуль для отправки уведомлений пользователям
+"""
+from aiogram import Bot
+from typing import Dict
+import logging
+
+logger = logging.getLogger(__name__)
+
+# Используем тот же токен, что и в основном боте.
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
+BOT_TOKEN = os.getenv("BOT_TOKEN")
+if not BOT_TOKEN:
+    raise ValueError("BOT_TOKEN не найден в переменных окружения. Создайте файл .env с BOT_TOKEN=your_token")
+
+bot_instance = Bot(token=BOT_TOKEN)
+
+
+async def send_notification(user_id: int, car_data: Dict):
+    """Отправить уведомление о найденном автомобиле"""
+    # Проверяем, что есть минимальные данные для отправки
+    title = car_data.get('title', '').strip()
+    if not title or len(title) < 3:
+        logger.warning(f"Пропущено уведомление: нет заголовка или заголовок слишком короткий (title: '{title}')")
+        return
+    
+    url = car_data.get('url', '').strip()
+    if not url or url == 'https://abw.by/cars' or 'filter' in url.lower():
+        logger.warning(f"Пропущено уведомление: неправильный URL - {url}")
+        return
+    
+    text = f"🚗 <b>Новое объявление!</b>\n\n"
+    
+    # Используем полный заголовок, если он есть и содержит больше информации, чем просто brand + model
+    brand = car_data.get('brand', '').strip()
+    model = car_data.get('model', '').strip()
+    
+    # Формируем название автомобиля
+    if title and len(title) > len(f"{brand} {model}".strip()):
+        # Если заголовок более информативен, используем его
+        text += f"<b>{title}</b>\n"
+    elif brand or model:
+        # Иначе используем brand + model
+        car_name = f"{brand} {model}".strip()
+        if car_name:
+            text += f"<b>{car_name}</b>\n"
+        else:
+            # Если brand и model пустые, используем заголовок
+            text += f"<b>{title}</b>\n"
+    else:
+        # Если ничего нет, используем заголовок
+        text += f"<b>{title}</b>\n"
+    
+    text += "\n"
+    
+    # Формируем список характеристик
+    details = []
+    
+    if car_data.get('year'):
+        details.append(f"📅 Год: {car_data['year']}")
+    if car_data.get('mileage'):
+        mileage = car_data['mileage']
+        if isinstance(mileage, (int, float)):
+            details.append(f"🛣️ Пробег: {mileage:,.0f} км")
+        else:
+            details.append(f"🛣️ Пробег: {mileage} км")
+    if car_data.get('engine_volume'):
+        volume = car_data['engine_volume']
+        if isinstance(volume, (int, float)):
+            details.append(f"⚙️ Объем: {volume} л")
+        else:
+            details.append(f"⚙️ Объем: {volume}")
+    if car_data.get('city'):
+        details.append(f"📍 Город: {car_data['city']}")
+    if car_data.get('transmission'):
+        details.append(f"🔧 Коробка: {car_data['transmission']}")
+    if car_data.get('engine_type'):
+        details.append(f"⛽ Двигатель: {car_data['engine_type']}")
+    
+    # Добавляем все характеристики
+    if details:
+        text += "\n".join(details) + "\n"
+    
+    text += "\n"
+    
+    # Цена
+    price_parts = []
+    price_usd = None
+    price_byn = None
+    
+    # Извлекаем цены
+    if car_data.get('price_usd'):
+        try:
+            price_usd = float(car_data['price_usd'])
+        except (ValueError, TypeError):
+            pass
+    
+    if car_data.get('price_byn'):
+        try:
+            price_byn = float(car_data['price_byn'])
+        except (ValueError, TypeError):
+            pass
+    
+    # Конвертация валют, если одна из цен отсутствует (примерный курс: 1 USD = 3.3 BYN)
+    if price_usd and not price_byn:
+        price_byn = price_usd * 3.3
+    elif price_byn and not price_usd:
+        price_usd = price_byn / 3.3
+    
+    # Форматируем и добавляем цены
+    if price_usd:
+        price_parts.append(f"<b>${price_usd:,.0f}</b>")
+    if price_byn:
+        price_parts.append(f"{price_byn:,.0f} BYN")
+    
+    if price_parts:
+        text += f"💰 {' '.join(price_parts)}\n\n"
+    else:
+        text += "\n"
+    
+    # Проверяем и исправляем URL если нужно
+    url = car_data.get('url', '')
+    if url:
+        # Убеждаемся, что URL полный
+        if not url.startswith('http'):
+            # Если относительный путь, добавляем домен в зависимости от источника
+            source = car_data.get('source', '')
+            if 'av.by' in source or 'av.by' in url:
+                url = f"https://av.by{url}" if url.startswith('/') else f"https://av.by/{url}"
+            elif 'kufar' in source or 'kufar' in url:
+                url = f"https://kufar.by{url}" if url.startswith('/') else f"https://kufar.by/{url}"
+            elif 'onliner' in source or 'onliner' in url:
+                url = f"https://ab.onliner.by{url}" if url.startswith('/') else f"https://ab.onliner.by/{url}"
+            elif 'abw' in source or 'abw' in url:
+                url = f"https://abw.by{url}" if url.startswith('/') else f"https://abw.by/{url}"
+    
+    if url:
+        text += f"🔗 <a href='{url}'>Открыть объявление</a>"
+    else:
+        text += "🔗 Ссылка на объявление недоступна"
+    
+    try:
+        if car_data.get('image_url'):
+            await bot_instance.send_photo(user_id, car_data['image_url'], caption=text, parse_mode='HTML')
+            logger.info(f"Отправлено уведомление с фото пользователю {user_id}: {title[:50] if title else 'N/A'}")
+        else:
+            await bot_instance.send_message(user_id, text, parse_mode='HTML', disable_web_page_preview=False)
+            logger.info(f"Отправлено уведомление пользователю {user_id}: {title[:50] if title else 'N/A'}")
+    except Exception as e:
+        error_msg = str(e)
+        # Игнорируем ошибку "chat not found" для несуществующих пользователей (тестовые аккаунты)
+        if 'chat not found' in error_msg.lower():
+            logger.warning(f"Пропущено уведомление пользователю {user_id}: чат не найден (возможно, тестовый пользователь)")
+        else:
+            logger.error(f"Ошибка при отправке уведомления пользователю {user_id}: {e}", exc_info=True)
