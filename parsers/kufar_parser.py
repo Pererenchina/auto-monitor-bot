@@ -10,6 +10,7 @@
 import asyncio
 import logging
 import httpx
+import re
 from typing import List, Dict
 from .base_parser import BaseParser
 
@@ -222,8 +223,16 @@ class KufarParser(BaseParser):
                             # Пробуем извлечь числовое значение
                             if param_text:
                                 param_text_str = str(param_text)
-                                # Убираем все кроме цифр, точки, запятой и пробелов (для разделителей тысяч)
-                                price_str = ''.join(c for c in param_text_str if c.isdigit() or c == '.' or c == ',' or c == ' ' or c == '\xa0')
+                                
+                                # Ищем первое число в строке (чтобы не объединять несколько чисел)
+                                # Используем регулярное выражение для поиска числа с разделителями тысяч
+                                # Ищем число с возможными разделителями тысяч (пробелы, запятые, точки)
+                                # Формат: 55 650, 55,650, 55.650, 55650
+                                price_match = re.search(r'(\d[\d\s,\.]*\d|\d)', param_text_str)
+                                if not price_match:
+                                    continue
+                                
+                                price_str = price_match.group(1)
                                 # Убираем пробелы и неразрывные пробелы (разделители тысяч)
                                 price_str = price_str.replace(' ', '').replace('\xa0', '')
                                 
@@ -259,12 +268,20 @@ class KufarParser(BaseParser):
                                 
                                 if price_str:
                                     price_val = float(price_str)
+                                    
+                                    # ВАЛИДАЦИЯ: проверяем разумность цены сразу после парсинга
+                                    if price_val > 1000000:  # Если больше 1 млн, вероятно ошибка
+                                        logger.warning(f"kufar.by: Подозрительно большая цена при парсинге: {price_val} (исходная строка: '{param_text_str}'), пропускаем")
+                                        continue
+                                    
                                     # Определяем валюту по метке или контексту
                                     param_text_lower = param_text_str.lower()
                                     if 'usd' in param_label or '$' in param_text_lower or 'долл' in param_text_lower or param_code == 'price_usd':
-                                        price_usd = price_val
+                                        if not price_usd:  # Не перезаписываем, если уже есть
+                                            price_usd = price_val
                                     elif 'byn' in param_label or 'р.' in param_text_lower or 'бел' in param_text_lower or 'руб' in param_text_lower or param_code == 'price_byn':
-                                        price_byn = price_val
+                                        if not price_byn:  # Не перезаписываем, если уже есть
+                                            price_byn = price_val
                                     # Если валюта не определена, НЕ делаем предположений - оставляем None
                                     # Это предотвращает неправильную интерпретацию цен в BYN как USD
                         except (ValueError, TypeError) as e:
@@ -281,14 +298,26 @@ class KufarParser(BaseParser):
                         # Преобразуем в числа, если они строки
                         try:
                             price_usd = float(price_usd_raw) if price_usd_raw else None
+                            # Валидация: если цена больше 1 млн USD, вероятно ошибка
+                            if price_usd and price_usd > 1000000:
+                                logger.warning(f"kufar.by: Подозрительно большая цена USD из price_info: {price_usd}, пропускаем")
+                                price_usd = None
                         except (ValueError, TypeError):
                             price_usd = None
                         try:
                             price_byn = float(price_byn_raw) if price_byn_raw else None
+                            # Валидация: если цена больше 10 млн BYN, вероятно ошибка
+                            if price_byn and price_byn > 10000000:
+                                logger.warning(f"kufar.by: Подозрительно большая цена BYN из price_info: {price_byn}, пропускаем")
+                                price_byn = None
                         except (ValueError, TypeError):
                             price_byn = None
                     elif isinstance(price_info, (int, float)):
                         price_byn = float(price_info)
+                        # Валидация
+                        if price_byn > 10000000:
+                            logger.warning(f"kufar.by: Подозрительно большая цена BYN из price_info (число): {price_byn}, пропускаем")
+                            price_byn = None
             
             # Также пробуем напрямую из ad
             if not price_usd and not price_byn:
@@ -296,10 +325,18 @@ class KufarParser(BaseParser):
                 price_byn_raw = ad.get('price_byn') or ad.get('priceBYN') or ad.get('price')
                 try:
                     price_usd = float(price_usd_raw) if price_usd_raw else None
+                    # Валидация
+                    if price_usd and price_usd > 1000000:
+                        logger.warning(f"kufar.by: Подозрительно большая цена USD из ad: {price_usd}, пропускаем")
+                        price_usd = None
                 except (ValueError, TypeError):
                     price_usd = None
                 try:
                     price_byn = float(price_byn_raw) if price_byn_raw else None
+                    # Валидация
+                    if price_byn and price_byn > 10000000:
+                        logger.warning(f"kufar.by: Подозрительно большая цена BYN из ad: {price_byn}, пропускаем")
+                        price_byn = None
                 except (ValueError, TypeError):
                     price_byn = None
             
