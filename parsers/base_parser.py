@@ -53,12 +53,30 @@ class BaseParser(ABC):
         return None
     
     def parse_mileage(self, mileage_str: str) -> Optional[int]:
-        """Парсинг пробега из строки"""
+        """Парсинг пробега из строки с валидацией"""
         if not mileage_str:
             return None
-        mileage_str = ''.join(c for c in mileage_str if c.isdigit())
+        
+        # Убираем все кроме цифр, пробелов, запятых и точек (для разделителей тысяч)
+        cleaned = ''.join(c for c in str(mileage_str) if c.isdigit() or c in [' ', ',', '.', '\xa0'])
+        
+        # Убираем пробелы и неразрывные пробелы (разделители тысяч)
+        cleaned = cleaned.replace(' ', '').replace('\xa0', '').replace(',', '').replace('.', '')
+        
+        # Если строка пустая после очистки, возвращаем None
+        if not cleaned:
+            return None
+        
         try:
-            return int(mileage_str)
+            mileage = int(cleaned)
+            
+            # Валидация: если пробег больше 1 миллиона км, это вероятно ошибка парсинга
+            # (например, если объединились год и пробег: "2019 117 841" -> 2019117841)
+            if mileage > 1000000:
+                logger.warning(f"Подозрительно большой пробег: {mileage} км (исходная строка: '{mileage_str}'), пропускаем")
+                return None
+            
+            return mileage
         except ValueError:
             return None
     

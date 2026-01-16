@@ -89,7 +89,9 @@ async def send_notification(user_id: int, car_data: Dict):
     if car_data.get('mileage'):
         mileage = car_data['mileage']
         if isinstance(mileage, (int, float)):
-            details.append(f"🛣️ Пробег: {mileage:,.0f} км")
+            # Форматируем пробег с разделителями тысяч (пробелы вместо запятых)
+            mileage_formatted = f"{int(mileage):,}".replace(',', ' ')
+            details.append(f"🛣️ Пробег: {mileage_formatted} км")
         else:
             details.append(f"🛣️ Пробег: {mileage} км")
     if car_data.get('engine_volume'):
@@ -136,6 +138,21 @@ async def send_notification(user_id: int, car_data: Dict):
                 price_byn = None
         except (ValueError, TypeError):
             pass
+    
+    # Проверка соответствия цен, если обе есть
+    if price_usd and price_byn:
+        expected_byn = price_usd * 3.3
+        expected_usd = price_byn / 3.3
+        # Если разница больше 20%, вероятно ошибка парсинга
+        if abs(price_byn - expected_byn) / max(expected_byn, 1) > 0.2:
+            logger.warning(f"Несоответствие цен в уведомлении: USD={price_usd}, BYN={price_byn}, ожидалось BYN={expected_byn:.0f}")
+            # Исправляем цену, используя более вероятную
+            if abs(price_usd - expected_usd) / max(price_usd, 1) < 0.2:
+                # USD более точная, пересчитываем BYN
+                price_byn = round(price_usd * 3.3, 0)
+            else:
+                # BYN более точная, пересчитываем USD
+                price_usd = round(price_byn / 3.3, 0)
     
     # Конвертация валют, если одна из цен отсутствует (примерный курс: 1 USD = 3.3 BYN)
     # Но только если обе цены разумные
