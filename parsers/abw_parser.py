@@ -328,15 +328,17 @@ class AbwParser(BaseParser):
             
             # Пробег - ищем "64 816 км" или подобное
             # Важно: не захватывать год (например, "2022 180 000 км" -> только "180 000")
+            # И не захватывать номера телефонов (например, "011 313 350" -> это не пробег)
             mileage = None
             # Ищем все возможные варианты пробега перед "км"
-            mileage_matches = re.finditer(r'(\d{1,3}(?:\s+\d{3})*)\s*км', full_text)
+            # Исключаем номера телефонов: не начинаем с 0, +375, или формата 0xx
+            mileage_matches = re.finditer(r'(?<![\d+])([1-9]\d{0,2}(?:\s+\d{3})*)\s*км', full_text)
             for match in mileage_matches:
                 mileage_str = match.group(1)
-                # Проверяем, не является ли это годом (19xx или 20xx)
                 mileage_cleaned = mileage_str.replace(' ', '').replace('\xa0', '')
+                
+                # Проверяем, не является ли это годом (19xx или 20xx)
                 if len(mileage_cleaned) == 4:
-                    # Если 4 цифры, проверяем, не год ли это
                     try:
                         year_candidate = int(mileage_cleaned)
                         if 1900 <= year_candidate <= 2100:
@@ -344,6 +346,17 @@ class AbwParser(BaseParser):
                             continue
                     except:
                         pass
+                
+                # Проверяем, не является ли это номером телефона
+                # Белорусские номера: начинаются с 0, +375, или имеют формат 0xx xxx xxx
+                if mileage_cleaned.startswith('0') or mileage_cleaned.startswith('375'):
+                    # Это номер телефона, пропускаем
+                    continue
+                
+                # Проверяем длину: пробег обычно не больше 6 цифр (999 999 км максимум)
+                if len(mileage_cleaned) > 6:
+                    # Слишком длинное число, вероятно не пробег
+                    continue
                 
                 # Пробуем распарсить через parse_mileage
                 mileage = self.parse_mileage(mileage_str)
