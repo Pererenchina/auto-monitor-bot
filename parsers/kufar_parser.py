@@ -302,46 +302,73 @@ class KufarParser(BaseParser):
                         price_byn_raw = price_info.get('byn') or price_info.get('BYN')
                         # Преобразуем в числа, если они строки
                         try:
-                            price_usd = float(price_usd_raw) if price_usd_raw else None
-                            # Валидация: если цена больше 1 млн USD, вероятно ошибка
-                            if price_usd and price_usd > 1000000:
-                                logger.warning(f"kufar.by: Подозрительно большая цена USD из price_info: {price_usd}, пропускаем")
-                                price_usd = None
+                            price_usd_candidate = float(price_usd_raw) if price_usd_raw else None
+                            # Валидация: если цена больше 1 млн, но меньше 10 млн, возможно это BYN
+                            if price_usd_candidate:
+                                if price_usd_candidate > 10000000:
+                                    logger.warning(f"kufar.by: Подозрительно большая цена из price_info.usd: {price_usd_candidate}, пропускаем")
+                                    price_usd = None
+                                elif price_usd_candidate > 1000000:
+                                    # Цена между 1 и 10 млн - вероятно это BYN, а не USD
+                                    price_byn = price_usd_candidate
+                                    price_usd = round(price_byn / 3.3, 0)
+                                    logger.info(f"kufar.by: Цена {price_usd_candidate} из price_info.usd интерпретирована как BYN, конвертирована в USD: {price_usd}")
+                                else:
+                                    price_usd = price_usd_candidate
                         except (ValueError, TypeError):
                             price_usd = None
                         try:
-                            price_byn = float(price_byn_raw) if price_byn_raw else None
+                            price_byn_candidate = float(price_byn_raw) if price_byn_raw else None
                             # Валидация: если цена больше 10 млн BYN, вероятно ошибка
-                            if price_byn and price_byn > 10000000:
-                                logger.warning(f"kufar.by: Подозрительно большая цена BYN из price_info: {price_byn}, пропускаем")
-                                price_byn = None
+                            if price_byn_candidate:
+                                if price_byn_candidate > 10000000:
+                                    logger.warning(f"kufar.by: Подозрительно большая цена BYN из price_info: {price_byn_candidate}, пропускаем")
+                                    price_byn = None
+                                else:
+                                    price_byn = price_byn_candidate
                         except (ValueError, TypeError):
                             price_byn = None
                     elif isinstance(price_info, (int, float)):
-                        price_byn = float(price_info)
+                        price_byn_candidate = float(price_info)
                         # Валидация
-                        if price_byn > 10000000:
-                            logger.warning(f"kufar.by: Подозрительно большая цена BYN из price_info (число): {price_byn}, пропускаем")
+                        if price_byn_candidate > 10000000:
+                            logger.warning(f"kufar.by: Подозрительно большая цена BYN из price_info (число): {price_byn_candidate}, пропускаем")
                             price_byn = None
+                        else:
+                            price_byn = price_byn_candidate
             
             # Также пробуем напрямую из ad
             if not price_usd and not price_byn:
                 price_usd_raw = ad.get('price_usd') or ad.get('priceUSD')
                 price_byn_raw = ad.get('price_byn') or ad.get('priceBYN') or ad.get('price')
                 try:
-                    price_usd = float(price_usd_raw) if price_usd_raw else None
-                    # Валидация
-                    if price_usd and price_usd > 1000000:
-                        logger.warning(f"kufar.by: Подозрительно большая цена USD из ad: {price_usd}, пропускаем")
-                        price_usd = None
+                    price_usd_candidate = float(price_usd_raw) if price_usd_raw else None
+                    # Валидация: если цена больше 1 млн, но меньше 10 млн, возможно это BYN в поле price_usd
+                    if price_usd_candidate:
+                        if price_usd_candidate > 10000000:
+                            # Слишком большая цена, пропускаем
+                            logger.warning(f"kufar.by: Подозрительно большая цена из ad.price_usd: {price_usd_candidate}, пропускаем")
+                            price_usd = None
+                        elif price_usd_candidate > 1000000:
+                            # Цена между 1 и 10 млн - вероятно это BYN, а не USD
+                            # Конвертируем в USD (примерный курс 3.3)
+                            price_byn = price_usd_candidate
+                            price_usd = round(price_byn / 3.3, 0)
+                            logger.info(f"kufar.by: Цена {price_usd_candidate} из ad.price_usd интерпретирована как BYN, конвертирована в USD: {price_usd}")
+                        else:
+                            # Нормальная цена USD
+                            price_usd = price_usd_candidate
                 except (ValueError, TypeError):
                     price_usd = None
                 try:
-                    price_byn = float(price_byn_raw) if price_byn_raw else None
+                    price_byn_candidate = float(price_byn_raw) if price_byn_raw else None
                     # Валидация
-                    if price_byn and price_byn > 10000000:
-                        logger.warning(f"kufar.by: Подозрительно большая цена BYN из ad: {price_byn}, пропускаем")
-                        price_byn = None
+                    if price_byn_candidate:
+                        if price_byn_candidate > 10000000:
+                            logger.warning(f"kufar.by: Подозрительно большая цена BYN из ad: {price_byn_candidate}, пропускаем")
+                            price_byn = None
+                        else:
+                            price_byn = price_byn_candidate
                 except (ValueError, TypeError):
                     price_byn = None
             
