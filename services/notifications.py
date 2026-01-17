@@ -14,7 +14,7 @@ from dotenv import load_dotenv
 logger = logging.getLogger(__name__)
 
 # Загружаем .env из корневой директории проекта
-env_path = Path(__file__).parent / '.env'
+env_path = Path(__file__).parent.parent / '.env'
 load_dotenv(dotenv_path=env_path, encoding='utf-8-sig')
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")

@@ -83,6 +83,105 @@ class BaseParser(ABC):
         except ValueError:
             return None
     
+    def normalize_prices(self, price_usd: Optional[float], price_byn: Optional[float], 
+                         validate: bool = True) -> tuple:
+        """
+        Нормализация и конвертация цен USD/BYN
+        
+        Args:
+            price_usd: Цена в USD
+            price_byn: Цена в BYN
+            validate: Если True, проверяет разумность цен перед конвертацией
+            
+        Returns:
+            Кортеж (price_usd, price_byn) после нормализации
+        """
+        # Конвертация валют, если одна из цен отсутствует (примерный курс: 1 USD = 3.3 BYN)
+        if price_usd and not price_byn:
+            if validate:
+                if price_usd < 1000000:  # Проверка на разумность (максимум 1 млн USD)
+                    price_byn = round(price_usd * 3.3, 0)
+                else:
+                    logger.warning(f"Подозрительно большая цена USD: {price_usd}, пропускаем конвертацию")
+                    price_usd = None
+            else:
+                price_byn = round(price_usd * 3.3, 0)
+        elif price_byn and not price_usd:
+            if validate:
+                if price_byn < 10000000:  # Проверка на разумность (максимум 10 млн BYN)
+                    price_usd = round(price_byn / 3.3, 0)
+                else:
+                    logger.warning(f"Подозрительно большая цена BYN: {price_byn}, пропускаем конвертацию")
+                    price_byn = None
+            else:
+                price_usd = round(price_byn / 3.3, 0)
+        
+        # Дополнительная проверка: если обе цены есть, но они несоответствуют курсу - исправляем
+        if price_usd and price_byn and validate:
+            expected_byn = price_usd * 3.3
+            expected_usd = price_byn / 3.3
+            # Если разница больше 15%, вероятно ошибка парсинга
+            usd_diff = abs(price_usd - expected_usd) / max(price_usd, 1)
+            byn_diff = abs(price_byn - expected_byn) / max(expected_byn, 1)
+            
+            if byn_diff > 0.15 or usd_diff > 0.15:
+                logger.warning(f"Несоответствие цен: USD={price_usd}, BYN={price_byn}, ожидалось BYN={expected_byn:.0f}, USD={expected_usd:.0f}")
+                # Выбираем более точную цену для пересчета
+                if usd_diff < byn_diff:
+                    # USD более точная, пересчитываем BYN
+                    old_byn = price_byn
+                    price_byn = round(price_usd * 3.3, 0)
+                    logger.info(f"Исправлена цена BYN: {price_byn} (было {old_byn})")
+                else:
+                    # BYN более точная, пересчитываем USD
+                    old_usd = price_usd
+                    price_usd = round(price_byn / 3.3, 0)
+                    logger.info(f"Исправлена цена USD: {price_usd} (было {old_usd})")
+        
+        return price_usd, price_byn
+    
+    def extract_brand_model_from_properties(self, properties: List, ad: Optional[Dict] = None) -> tuple:
+        """
+        Извлечение марки и модели из properties или ad
+        
+        Args:
+            properties: Список свойств объявления
+            ad: Словарь с данными объявления (опционально)
+            
+        Returns:
+            Кортеж (brand, model)
+        """
+        brand = ''
+        model = ''
+        
+        # Сначала пробуем напрямую из ad (если передан)
+        if ad:
+            brand_raw = ad.get('brand') or ad.get('brandName') or ad.get('make')
+            if brand_raw:
+                if isinstance(brand_raw, dict):
+                    brand = brand_raw.get('name', '') or str(brand_raw)
+                else:
+                    brand = str(brand_raw)
+            
+            model_raw = ad.get('model') or ad.get('modelName')
+            if model_raw:
+                if isinstance(model_raw, dict):
+                    model = model_raw.get('name', '') or str(model_raw)
+                else:
+                    model = str(model_raw)
+        
+        # Затем пробуем из properties
+        for prop in properties:
+            if isinstance(prop, dict):
+                prop_name = prop.get('name', '')
+                prop_value = prop.get('value', '')
+                if prop_name == 'brand' and not brand:
+                    brand = str(prop_value)
+                elif prop_name == 'model' and not model:
+                    model = str(prop_value)
+        
+        return brand, model
+    
     def extract_body_type(self, text: str, properties: Optional[Dict] = None) -> Optional[str]:
         """Извлечение типа кузова из текста или свойств"""
         if not text:

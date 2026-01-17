@@ -9,8 +9,7 @@ import sys
 # Локальные импорты
 from bot import dp, bot
 from db_manager import init_db
-from monitor import MonitorService
-from notifications import bot_instance
+from services import MonitorService, bot_instance
 
 # Настройка логирования
 logging.basicConfig(

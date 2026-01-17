@@ -13,8 +13,8 @@ from apscheduler.triggers.interval import IntervalTrigger
 # Локальные импорты
 from database import UserFilter
 from db_manager import DBManager
-from parsers import AvByParser, KufarParser, OnlinerParser, AbwParser
-from notifications import send_notification
+from parsers.factory import ParserFactory
+from .notifications import send_notification
 
 logger = logging.getLogger(__name__)
 
@@ -25,12 +25,7 @@ class MonitorService:
     def __init__(self):
         self.scheduler = AsyncIOScheduler()
         self.db_manager = DBManager()
-        self.parsers = {
-            'av.by': AvByParser(),
-            'kufar.by': KufarParser(),
-            'ab.onliner.by': OnlinerParser(),
-            'abw.by': AbwParser(),
-        }
+        self.parsers = ParserFactory.get_all_parsers()
     
     async def check_ads(self) -> None:
         """Проверка объявлений по всем активным фильтрам"""

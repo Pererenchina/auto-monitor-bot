@@ -363,34 +363,8 @@ class OnlinerParser(BaseParser):
                     '')
             
             # Извлекаем марку и модель из properties (как в av.by) или напрямую
-            brand = ''
-            model = ''
-            
-            # Пробуем из properties
             properties = ad.get('properties', [])
-            for prop in properties:
-                if isinstance(prop, dict):
-                    prop_name = prop.get('name', '')
-                    prop_value = prop.get('value', '')
-                    if prop_name == 'brand':
-                        brand = str(prop_value)
-                    elif prop_name == 'model':
-                        model = str(prop_value)
-            
-            # Если не нашли в properties, пробуем прямые поля
-            if not brand:
-                brand_obj = ad.get('brand', {})
-                if isinstance(brand_obj, dict):
-                    brand = brand_obj.get('name', '')
-                else:
-                    brand = str(brand_obj) if brand_obj else ''
-            
-            if not model:
-                model_obj = ad.get('model', {})
-                if isinstance(model_obj, dict):
-                    model = model_obj.get('name', '')
-                else:
-                    model = str(model_obj) if model_obj else ''
+            brand, model = self.extract_brand_model_from_properties(properties, ad)
             
             # Если название пустое, формируем из марки и модели
             if not title and (brand or model):
@@ -427,26 +401,22 @@ class OnlinerParser(BaseParser):
                 if isinstance(prop, dict) and prop.get('name') == 'mileage':
                     mileage_value = prop.get('value')
                     if isinstance(mileage_value, (int, float)):
-                        mileage = int(mileage_value)
+                        # Используем parse_mileage для валидации
+                        mileage = self.parse_mileage(str(mileage_value))
                     elif isinstance(mileage_value, str):
-                        # Убираем пробелы и пробуем преобразовать (например, "209 000" -> 209000)
-                        mileage_str = mileage_value.replace(' ', '').replace(',', '').replace('км', '')
-                        try:
-                            mileage = int(mileage_str)
-                        except:
-                            pass
-                    break
+                        # Используем parse_mileage для валидации
+                        mileage = self.parse_mileage(mileage_value)
+                    if mileage:
+                        break
             if mileage is None:
                 mileage_raw = ad.get('mileage') or ad.get('odometer')
                 if mileage_raw:
                     if isinstance(mileage_raw, (int, float)):
-                        mileage = int(mileage_raw)
+                        # Используем parse_mileage для валидации
+                        mileage = self.parse_mileage(str(mileage_raw))
                     elif isinstance(mileage_raw, str):
-                        mileage_str = mileage_raw.replace(' ', '').replace(',', '').replace('км', '')
-                        try:
-                            mileage = int(mileage_str)
-                        except:
-                            pass
+                        # Используем parse_mileage для валидации
+                        mileage = self.parse_mileage(mileage_raw)
             
             # Объем двигателя
             engine_volume = None
@@ -796,11 +766,8 @@ class OnlinerParser(BaseParser):
                         if price_usd or price_byn:
                             break
             
-            # Конвертация валют, если одна из цен отсутствует (примерный курс: 1 USD = 3.3 BYN)
-            if price_usd and not price_byn:
-                price_byn = price_usd * 3.3
-            elif price_byn and not price_usd:
-                price_usd = price_byn / 3.3
+            # Конвертация валют, если одна из цен отсутствует
+            price_usd, price_byn = self.normalize_prices(price_usd, price_byn, validate=False)
             
             # Год - ищем в vehicle-form__offers-part_year
             year = None
