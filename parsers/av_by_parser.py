@@ -4,13 +4,18 @@
 Использует HTML-парсинг с cloudscraper для обхода защиты.
 Данные извлекаются из JSON в __NEXT_DATA__ script теге.
 """
+# Стандартная библиотека
 import asyncio
-import logging
-import cloudscraper
-from bs4 import BeautifulSoup
 import json
+import logging
 import re
 from typing import List, Dict
+
+# Сторонние библиотеки
+import cloudscraper
+from bs4 import BeautifulSoup
+
+# Локальные импорты
 from .base_parser import BaseParser
 
 logger = logging.getLogger(__name__)

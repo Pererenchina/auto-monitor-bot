@@ -1,10 +1,17 @@
 """
 Менеджер базы данных для работы с SQLAlchemy
 """
-from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
-from sqlalchemy import select, and_
-from database import Base, UserFilter, FoundCar
+# Стандартная библиотека
 from typing import Optional, List
+
+# Сторонние библиотеки
+from sqlalchemy import select, and_
+from sqlalchemy.ext.asyncio import (
+    create_async_engine, AsyncSession, async_sessionmaker
+)
+
+# Локальные импорты
+from database import Base, UserFilter, FoundCar
 
 DATABASE_URL = "sqlite+aiosqlite:///./auto_monitor.db"
 
@@ -112,7 +119,7 @@ class DBManager:
             return car
     
     @staticmethod
-    async def mark_car_as_notified(car_id: int):
+    async def mark_car_as_notified(car_id: int) -> None:
         """Отметить объявление как уведомленное"""
         async with async_session() as session:
             result = await session.execute(

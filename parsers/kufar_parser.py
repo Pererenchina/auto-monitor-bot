@@ -7,11 +7,16 @@
 - Обновление формата запросов (GraphQL vs REST)
 - Проверка актуальных параметров фильтрации
 """
+# Стандартная библиотека
 import asyncio
 import logging
-import httpx
 import re
 from typing import List, Dict
+
+# Сторонние библиотеки
+import httpx
+
+# Локальные импорты
 from .base_parser import BaseParser
 
 logger = logging.getLogger(__name__)

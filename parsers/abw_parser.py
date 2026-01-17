@@ -4,12 +4,17 @@
 Использует HTML-парсинг через BeautifulSoup и cloudscraper.
 Объявления находятся в элементах с классом 'card' и 'card--hover'.
 """
+# Стандартная библиотека
 import asyncio
 import logging
-import cloudscraper
-from bs4 import BeautifulSoup
 import re
 from typing import List, Dict
+
+# Сторонние библиотеки
+import cloudscraper
+from bs4 import BeautifulSoup
+
+# Локальные импорты
 from .base_parser import BaseParser
 
 logger = logging.getLogger(__name__)

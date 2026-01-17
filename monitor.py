@@ -1,14 +1,20 @@
 """
 Фоновая задача для мониторинга объявлений
 """
+# Стандартная библиотека
+import asyncio
 import logging
+from typing import Dict, List
+
+# Сторонние библиотеки
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.interval import IntervalTrigger
+
+# Локальные импорты
+from database import UserFilter
 from db_manager import DBManager
 from parsers import AvByParser, KufarParser, OnlinerParser, AbwParser
 from notifications import send_notification
-import asyncio
-from typing import Dict, List
 
 logger = logging.getLogger(__name__)
 
@@ -26,7 +32,7 @@ class MonitorService:
             'abw.by': AbwParser(),
         }
     
-    async def check_ads(self):
+    async def check_ads(self) -> None:
         """Проверка объявлений по всем активным фильтрам"""
         logger.info("Начинаю проверку объявлений...")
         
@@ -47,7 +53,7 @@ class MonitorService:
         except Exception as e:
             logger.error(f"Ошибка при проверке объявлений: {e}", exc_info=True)
     
-    async def check_filter(self, user_filter):
+    async def check_filter(self, user_filter: UserFilter) -> None:
         """Проверка объявлений по одному фильтру"""
         try:
             # Преобразуем фильтр в словарь для парсеров
@@ -143,7 +149,7 @@ class MonitorService:
         except Exception as e:
             logger.error(f"Ошибка при проверке фильтра #{user_filter.id}: {e}", exc_info=True)
     
-    def start(self, interval_minutes: int = 3):
+    def start(self, interval_minutes: int = 3) -> None:
         """Запустить мониторинг"""
         # Запускаем периодическую проверку
         self.scheduler.add_job(
@@ -155,7 +161,7 @@ class MonitorService:
         self.scheduler.start()
         logger.info(f"Мониторинг запущен (интервал: {interval_minutes} минут)")
     
-    def stop(self):
+    def stop(self) -> None:
         """Остановить мониторинг"""
         self.scheduler.shutdown()
         logger.info("Мониторинг остановлен")

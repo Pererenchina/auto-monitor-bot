@@ -1,10 +1,13 @@
 """
 Базовый класс для парсеров объявлений
 """
+# Стандартная библиотека
+import logging
 from abc import ABC, abstractmethod
 from typing import List, Dict, Optional
+
+# Сторонние библиотеки
 import cloudscraper
-import logging
 
 logger = logging.getLogger(__name__)
 

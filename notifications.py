@@ -1,16 +1,17 @@
 """
 Модуль для отправки уведомлений пользователям
 """
-from aiogram import Bot
-from typing import Dict
+# Стандартная библиотека
 import logging
+import os
+from pathlib import Path
+from typing import Dict
+
+# Сторонние библиотеки
+from aiogram import Bot
+from dotenv import load_dotenv
 
 logger = logging.getLogger(__name__)
-
-# Используем тот же токен, что и в основном боте
-import os
-from dotenv import load_dotenv
-from pathlib import Path
 
 # Загружаем .env из корневой директории проекта
 env_path = Path(__file__).parent / '.env'
@@ -18,7 +19,10 @@ load_dotenv(dotenv_path=env_path, encoding='utf-8-sig')
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 if not BOT_TOKEN:
-    raise ValueError("BOT_TOKEN не найден в переменных окружения. Создайте файл .env с BOT_TOKEN=your_token")
+    raise ValueError(
+        "BOT_TOKEN не найден в переменных окружения. "
+        "Создайте файл .env с BOT_TOKEN=your_token"
+    )
 
 bot_instance = Bot(token=BOT_TOKEN)
 

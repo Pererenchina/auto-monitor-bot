@@ -1,10 +1,16 @@
 """
 Модели базы данных для хранения фильтров пользователей и найденных объявлений
 """
-from sqlalchemy import Column, Integer, String, Float, BigInteger, Boolean, DateTime, ForeignKey, Text
+# Стандартная библиотека
+from datetime import datetime
+
+# Сторонние библиотеки
+from sqlalchemy import (
+    Column, Integer, String, Float, BigInteger, Boolean, DateTime,
+    ForeignKey, Text
+)
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship
-from datetime import datetime
 
 Base = declarative_base()
 

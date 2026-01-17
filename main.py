@@ -1,9 +1,12 @@
 """
 Главный файл для запуска бота
 """
+# Стандартная библиотека
 import asyncio
 import logging
 import sys
+
+# Локальные импорты
 from bot import dp, bot
 from db_manager import init_db
 from monitor import MonitorService

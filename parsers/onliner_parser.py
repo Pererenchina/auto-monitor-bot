@@ -4,24 +4,35 @@
 ВАЖНО: Onliner.by не предоставляет публичного API для автомобилей.
 Используется HTML-парсинг с Playwright для рендеринга JavaScript и получения полного HTML.
 """
+# Стандартная библиотека
 import asyncio
-import logging
-import cloudscraper
-from bs4 import BeautifulSoup
 import json
+import logging
 import re
 from typing import List, Dict
+
+# Сторонние библиотеки
+import cloudscraper
+from bs4 import BeautifulSoup
+
+# Локальные импорты
 from .base_parser import BaseParser
 
 logger = logging.getLogger(__name__)
 
 # Пробуем импортировать Playwright, если не установлен - используем cloudscraper
 try:
-    from playwright.async_api import async_playwright, TimeoutError as PlaywrightTimeoutError
+    from playwright.async_api import (
+        async_playwright,
+        TimeoutError as PlaywrightTimeoutError
+    )
     PLAYWRIGHT_AVAILABLE = True
 except ImportError:
     PLAYWRIGHT_AVAILABLE = False
-    logger.warning("Playwright не установлен. Установите: pip install playwright && playwright install chromium")
+    logger.warning(
+        "Playwright не установлен. "
+        "Установите: pip install playwright && playwright install chromium"
+    )
 
 
 class OnlinerParser(BaseParser):
