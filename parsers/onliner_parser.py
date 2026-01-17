@@ -830,11 +830,8 @@ class OnlinerParser(BaseParser):
                 if mileage_elem:
                     mileage_text = mileage_elem.get_text(strip=True)
                     if mileage_text.lower() not in ['новый', 'new']:
-                        mileage_str = mileage_text.replace(' ', '').replace(',', '').replace('км', '').replace('km', '')
-                        try:
-                            mileage = int(mileage_str)
-                        except:
-                            pass
+                        # Используем parse_mileage для валидации
+                        mileage = self.parse_mileage(mileage_text)
             
             # Город - ищем в vehicle-form__offers-part_city
             city = ''

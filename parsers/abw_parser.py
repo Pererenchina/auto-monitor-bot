@@ -322,14 +322,29 @@ class AbwParser(BaseParser):
                     pass
             
             # Пробег - ищем "64 816 км" или подобное
+            # Важно: не захватывать год (например, "2022 180 000 км" -> только "180 000")
             mileage = None
-            mileage_match = re.search(r'(\d[\d\s]+)\s*км', full_text)
-            if mileage_match:
-                try:
-                    mileage_str = mileage_match.group(1).replace(' ', '').replace('\xa0', '').replace(',', '')
-                    mileage = int(mileage_str)
-                except:
-                    pass
+            # Ищем все возможные варианты пробега перед "км"
+            mileage_matches = re.finditer(r'(\d{1,3}(?:\s+\d{3})*)\s*км', full_text)
+            for match in mileage_matches:
+                mileage_str = match.group(1)
+                # Проверяем, не является ли это годом (19xx или 20xx)
+                mileage_cleaned = mileage_str.replace(' ', '').replace('\xa0', '')
+                if len(mileage_cleaned) == 4:
+                    # Если 4 цифры, проверяем, не год ли это
+                    try:
+                        year_candidate = int(mileage_cleaned)
+                        if 1900 <= year_candidate <= 2100:
+                            # Это год, пропускаем
+                            continue
+                    except:
+                        pass
+                
+                # Пробуем распарсить через parse_mileage
+                mileage = self.parse_mileage(mileage_str)
+                if mileage:
+                    # Если успешно распарсили и валидация прошла, используем это значение
+                    break
             
             # Объем двигателя - ищем "2.4 л" или подобное
             engine_volume = None

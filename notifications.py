@@ -122,16 +122,21 @@ async def send_notification(user_id: int, car_data: Dict):
     if price_usd and price_byn:
         expected_byn = price_usd * 3.3
         expected_usd = price_byn / 3.3
-        # Если разница больше 20%, вероятно ошибка парсинга
-        if abs(price_byn - expected_byn) / max(expected_byn, 1) > 0.2:
-            logger.warning(f"Несоответствие цен в уведомлении: USD={price_usd}, BYN={price_byn}, ожидалось BYN={expected_byn:.0f}")
-            # Исправляем цену, используя более вероятную
-            if abs(price_usd - expected_usd) / max(price_usd, 1) < 0.2:
+        # Если разница больше 15%, вероятно ошибка парсинга
+        usd_diff = abs(price_usd - expected_usd) / max(price_usd, 1)
+        byn_diff = abs(price_byn - expected_byn) / max(expected_byn, 1)
+        
+        if byn_diff > 0.15 or usd_diff > 0.15:
+            logger.warning(f"Несоответствие цен в уведомлении: USD={price_usd}, BYN={price_byn}, ожидалось BYN={expected_byn:.0f}, USD={expected_usd:.0f}")
+            # Исправляем цену, используя более точную
+            if usd_diff < byn_diff:
                 # USD более точная, пересчитываем BYN
                 price_byn = round(price_usd * 3.3, 0)
+                logger.info(f"Исправлена цена BYN: {price_byn} (было {car_data.get('price_byn')})")
             else:
                 # BYN более точная, пересчитываем USD
                 price_usd = round(price_byn / 3.3, 0)
+                logger.info(f"Исправлена цена USD: {price_usd} (было {car_data.get('price_usd')})")
     
     # Конвертация валют, если одна из цен отсутствует (примерный курс: 1 USD = 3.3 BYN)
     # Но только если обе цены разумные
