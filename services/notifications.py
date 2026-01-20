@@ -29,6 +29,9 @@ bot_instance = Bot(token=BOT_TOKEN)
 
 async def send_notification(user_id: int, car_data: Dict):
     """Отправить уведомление о найденном автомобиле"""
+    # Логируем данные для отладки (INFO уровень, чтобы видеть в логах)
+    logger.info(f"Отправка уведомления: title={car_data.get('title')}, year={car_data.get('year')}, mileage={car_data.get('mileage')}, engine_volume={car_data.get('engine_volume')}, city={car_data.get('city')}, transmission={car_data.get('transmission')}, engine_type={car_data.get('engine_type')}, body_type={car_data.get('body_type')}, source={car_data.get('source')}")
+    
     # Проверяем, что есть минимальные данные для отправки
     title = car_data.get('title', '').strip()
     if not title or len(title) < 3:
@@ -89,6 +92,8 @@ async def send_notification(user_id: int, car_data: Dict):
         details.append(f"🔧 Коробка: {car_data['transmission']}")
     if car_data.get('engine_type'):
         details.append(f"⛽ Двигатель: {car_data['engine_type']}")
+    if car_data.get('body_type'):
+        details.append(f"🚙 Тип кузова: {car_data['body_type']}")
     
     # Добавляем все характеристики
     if details:
@@ -155,10 +160,14 @@ async def send_notification(user_id: int, car_data: Dict):
     if price_usd and price_usd < 1000000:
         price_parts.append(f"<b>${price_usd:,.0f}</b>".replace(',', ' '))
     if price_byn and price_byn < 10000000:
-        price_parts.append(f"{price_byn:,.0f} BYN".replace(',', ' '))
+        price_parts.append(f"<b>{price_byn:,.0f} BYN</b>".replace(',', ' '))
     
     if price_parts:
-        text += f"💰 {' '.join(price_parts)}\n\n"
+        # Если обе цены есть, разделяем их для читаемости
+        if len(price_parts) == 2:
+            text += f"💰 {price_parts[0]} / {price_parts[1]}\n\n"
+        else:
+            text += f"💰 {price_parts[0]}\n\n"
     else:
         text += "\n"
     
