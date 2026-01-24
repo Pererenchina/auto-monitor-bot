@@ -81,10 +81,21 @@ class MonitorService:
                     
                     valid_count = 0
                     new_cars_count = 0
-                    # Ограничиваем количество проверяемых объявлений для оптимизации
-                    # Проверяем только первые 30 самых новых объявлений
-                    # Это предотвращает отправку уведомлений о старых объявлениях при первом запуске
-                    cars_to_check = cars[:30]
+                    filtered_count = 0
+                    exists_count = 0
+                    # Определяем количество проверяемых объявлений
+                    # Если фильтр создан недавно (менее 7 дней назад), проверяем больше объявлений
+                    # чтобы не пропустить объявления, которые были выложены до создания фильтра
+                    from datetime import datetime, timedelta
+                    filter_age = datetime.utcnow() - user_filter.created_at.replace(tzinfo=None) if user_filter.created_at else timedelta(days=7)
+                    if filter_age < timedelta(days=7):
+                        # Новый фильтр - проверяем больше объявлений (до 200)
+                        # Это нужно, чтобы охватить объявления, выложенные несколько дней назад
+                        cars_to_check = cars[:200]
+                        logger.info(f"  Фильтр #{user_filter.id} создан недавно ({filter_age.days} дней назад), проверяю до 200 объявлений")
+                    else:
+                        # Старый фильтр - проверяем только новые (первые 50)
+                        cars_to_check = cars[:50]
                     
                     for car in cars_to_check:
                         # Проверяем, что данные объявления валидны
@@ -100,15 +111,23 @@ class MonitorService:
                         # Дополнительная проверка фильтров (на случай если парсер не применил их)
                         # Особенно важно для цены - проверяем еще раз перед сохранением
                         if not parser.matches_filters(car, filter_dict):
+                            filtered_count += 1
+                            if filtered_count == 1:
+                                logger.debug(f"  [FILTER #{user_filter.id}] Отфильтровано объявление: {title[:50]}... (brand={car.get('brand')}, model={car.get('model')}, year={car.get('year')}, price_usd={car.get('price_usd')})")
                             continue
                         
                         valid_count += 1
                         
-                        # Проверяем, не было ли уже это объявление
-                        exists = await self.db_manager.check_car_exists(
+                        # Проверяем, не было ли уже это объявление для данного пользователя
+                        # (чтобы не отправлять дубликаты, если объявление подходит нескольким фильтрам пользователя)
+                        exists = await self.db_manager.check_car_exists_for_user(
                             car['source'],
-                            car['ad_id']
+                            car['ad_id'],
+                            user_filter.user_id
                         )
+                        
+                        if exists:
+                            exists_count += 1
                         
                         if not exists:
                             # Удаляем поля, которых нет в модели FoundCar
@@ -135,7 +154,7 @@ class MonitorService:
                             # Небольшая задержка между уведомлениями
                             await asyncio.sleep(10)
                     
-                    logger.info(f"  Валидных объявлений на {source_name}: {valid_count} из {len(cars)}, новых: {new_cars_count}")
+                    logger.info(f"  Валидных объявлений на {source_name}: {valid_count} из {len(cars)}, отфильтровано: {filtered_count}, уже в БД: {exists_count}, новых: {new_cars_count}")
                 
                 except Exception as e:
                     logger.error(f"Ошибка при проверке {source_name}: {e}", exc_info=True)

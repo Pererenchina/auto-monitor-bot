@@ -1,17 +1,13 @@
 """
 Парсер для kufar.by (раздел Авто)
-Переписан с нуля для упрощения и улучшения надежности
+Упрощенная версия без дублирования кода
 """
-# Стандартная библиотека
 import asyncio
 import logging
-import re
 from typing import List, Dict, Optional
 
-# Сторонние библиотеки
 import httpx
 
-# Локальные импорты
 from .base_parser import BaseParser
 
 logger = logging.getLogger(__name__)
@@ -21,21 +17,20 @@ class KufarParser(BaseParser):
     """Парсер объявлений с kufar.by"""
     
     BASE_URL = "https://api.kufar.by/search-api/v1/search/rendered-paginated"
-    EXCHANGE_RATE = 3.3  # Примерный курс USD/BYN
+    EXCHANGE_RATE = 2.9
     
     async def search(self, filters: Dict) -> List[Dict]:
         """Поиск объявлений на kufar.by"""
         results = []
         
         try:
-            # Формируем параметры запроса
             params = {
                 'cat': 2010,  # Категория Автомобили
                 'size': 50,
                 'sort': 'lst.d',  # Сортировка по дате (новые сначала)
             }
             
-            # Добавляем поисковый запрос
+            # Поисковый запрос
             query_parts = []
             if filters.get('brand'):
                 query_parts.append(filters['brand'])
@@ -45,16 +40,12 @@ class KufarParser(BaseParser):
             if query_parts:
                 params['query'] = ' '.join(query_parts)
             
-            # Фильтр по цене убран - kufar API не поддерживает его надежно
-            # Фильтрация по цене будет происходить на стороне парсера через matches_filters
-            
             headers = {
                 **self.headers,
                 'Referer': 'https://kufar.by/listings',
                 'Accept': 'application/json',
             }
             
-            # Задержка для избежания rate limiting
             await asyncio.sleep(1)
             
             async with httpx.AsyncClient(timeout=30.0) as client:
@@ -73,16 +64,21 @@ class KufarParser(BaseParser):
                     
                     parsed_count = 0
                     filtered_count = 0
+                    first_filtered = None
                     
                     for ad in ads:
                         car_data = self._parse_ad(ad)
                         if car_data:
                             parsed_count += 1
-                            # Применяем фильтры
                             if not filters or self.matches_filters(car_data, filters):
                                 results.append(car_data)
                             else:
                                 filtered_count += 1
+                                if filtered_count == 1 and first_filtered is None:
+                                    first_filtered = car_data
+                    
+                    if first_filtered:
+                        logger.info(f"kufar.by: Пример отфильтрованного: brand='{first_filtered.get('brand')}', model='{first_filtered.get('model')}', filter_brand='{filters.get('brand')}', filter_model='{filters.get('model')}', year={first_filtered.get('year')}, filter_year_from={filters.get('year_from')}, price_usd={first_filtered.get('price_usd')}, filter_price_to={filters.get('price_to_usd')}")
                     
                     logger.info(f"kufar.by: Распарсено {parsed_count} из {len(ads)}, отфильтровано {filtered_count}, осталось {len(results)}")
                 elif response.status_code == 429:
@@ -102,17 +98,15 @@ class KufarParser(BaseParser):
             if not ad_id:
                 return None
             
-            # Заголовок
             title = ad.get('subject') or ad.get('title') or ad.get('ad_title') or ''
             
-            # Извлекаем параметры объявления
+            # Параметры объявления
             params_dict = self._extract_params(ad)
             
             # Марка и модель
             brand = params_dict.get('brand', '')
             model = params_dict.get('model', '')
             
-            # Если не нашли в параметрах, пробуем из заголовка
             if not brand and title:
                 parts = title.split()
                 if len(parts) >= 2:
@@ -131,8 +125,8 @@ class KufarParser(BaseParser):
                 if title_parts:
                     title = ' '.join(title_parts)
             
-            # Цены - используем упрощенный подход
-            price_usd, price_byn = self._extract_prices(ad, params_dict)
+            # Цены
+            price_usd, price_byn = self._extract_prices(ad)
             
             # Год
             year = params_dict.get('year')
@@ -204,7 +198,6 @@ class KufarParser(BaseParser):
         params = {}
         params_list = ad.get('ad_parameters', []) or ad.get('params', [])
         
-        # Маппинг кодов параметров kufar.by
         param_mapping = {
             'brand': ['brand', 'brn'],
             'model': ['cars_level_1', 'crl', 'model'],
@@ -222,11 +215,10 @@ class KufarParser(BaseParser):
                 continue
             
             param_code = p.get('p') or p.get('pu')
-            param_text = p.get('vl')  # Текстовое значение (предпочтительно)
-            param_value = p.get('v')  # Числовое значение
+            param_text = p.get('vl')
+            param_value = p.get('v')
             param_label = p.get('pl', '').lower()
             
-            # Определяем тип параметра
             param_type = None
             for key, codes in param_mapping.items():
                 if param_code in codes or any(code in param_label for code in codes):
@@ -234,8 +226,6 @@ class KufarParser(BaseParser):
                     break
             
             if param_type:
-                # Используем текстовое значение, если есть и не пустое, иначе числовое
-                # Для пробега предпочтительно числовое значение из 'v'
                 if param_type == 'mileage' and param_value is not None:
                     params[param_type] = param_value
                 else:
@@ -245,47 +235,60 @@ class KufarParser(BaseParser):
         
         return params
     
-    def _extract_prices(self, ad: Dict, params: Dict) -> tuple:
+    def _normalize_price_value(self, price_val: float) -> Optional[float]:
+        """Нормализация значения цены (обработка копеек)"""
+        if not price_val or price_val <= 0:
+            return None
+        
+        # Если цена очень большая (> 10 млн), возможно это копейки
+        if price_val > 10000000:
+            price_in_rubles = price_val / 100
+            # Если после деления получается разумная цена (10000-100000 рублей)
+            if 10000 <= price_in_rubles <= 100000:
+                logger.info(f"kufar.by: Цена {price_val} интерпретирована как копейки, конвертирована в рубли: {price_in_rubles}")
+                return price_in_rubles
+        
+        # Ограничиваем максимальную цену
+        if price_val <= 50000000:
+            return price_val
+        
+        return None
+    
+    def _extract_prices(self, ad: Dict) -> tuple:
         """Извлечение цен из объявления"""
         price_usd = None
         price_byn = None
         
-        # 1. Пробуем из price_info (основной источник)
+        # Пробуем из price_info
         price_info = ad.get('price', {})
         if isinstance(price_info, dict):
-            # Сначала BYN (более надежно)
             price_byn_raw = price_info.get('byn') or price_info.get('BYN')
             if price_byn_raw:
                 try:
-                    price_byn_val = float(price_byn_raw)
-                    if 0 < price_byn_val <= 10000000:  # Разумный диапазон
-                        price_byn = price_byn_val
+                    price_byn = self._normalize_price_value(float(price_byn_raw))
                 except (ValueError, TypeError):
                     pass
             
-            # Затем USD
             price_usd_raw = price_info.get('usd') or price_info.get('USD')
             if price_usd_raw:
                 try:
                     price_usd_val = float(price_usd_raw)
-                    if 0 < price_usd_val <= 1000000:  # Разумный диапазон
+                    if 0 < price_usd_val <= 1000000:
                         price_usd = price_usd_val
                     elif 1000000 < price_usd_val <= 10000000 and not price_byn:
-                        # Если цена в диапазоне 1-10 млн и BYN нет, вероятно это BYN в USD поле
-                        price_byn = price_usd_val
-                        price_usd = round(price_usd_val / self.EXCHANGE_RATE, 0)
-                        logger.debug(f"kufar.by: Цена {price_usd_val} интерпретирована как BYN")
+                        # Возможно это BYN в USD поле
+                        price_byn = self._normalize_price_value(price_usd_val)
+                        if price_byn:
+                            price_usd = round(price_byn / self.EXCHANGE_RATE, 0)
                 except (ValueError, TypeError):
                     pass
         
-        # 2. Пробуем напрямую из ad
+        # Пробуем напрямую из ad
         if not price_usd and not price_byn:
             price_byn_raw = ad.get('price_byn') or ad.get('priceBYN') or ad.get('price')
             if price_byn_raw:
                 try:
-                    price_byn_val = float(price_byn_raw)
-                    if 0 < price_byn_val <= 10000000:
-                        price_byn = price_byn_val
+                    price_byn = self._normalize_price_value(float(price_byn_raw))
                 except (ValueError, TypeError):
                     pass
             
@@ -296,13 +299,13 @@ class KufarParser(BaseParser):
                     if 0 < price_usd_val <= 1000000:
                         price_usd = price_usd_val
                     elif 1000000 < price_usd_val <= 10000000 and not price_byn:
-                        price_byn = price_usd_val
-                        price_usd = round(price_usd_val / self.EXCHANGE_RATE, 0)
-                        logger.debug(f"kufar.by: Цена {price_usd_val} интерпретирована как BYN")
+                        price_byn = self._normalize_price_value(price_usd_val)
+                        if price_byn:
+                            price_usd = round(price_byn / self.EXCHANGE_RATE, 0)
                 except (ValueError, TypeError):
                     pass
         
-        # 3. Нормализация и конвертация
+        # Нормализация и конвертация
         price_usd, price_byn = self.normalize_prices(price_usd, price_byn, validate=True)
         
         return price_usd, price_byn

@@ -98,12 +98,17 @@ class DBManager:
             return False
     
     @staticmethod
-    async def check_car_exists(source: str, ad_id: str) -> bool:
-        """Проверить, существует ли объявление в базе"""
+    async def check_car_exists_for_user(source: str, ad_id: str, user_id: int) -> bool:
+        """Проверить, существует ли объявление в базе для конкретного пользователя (через любой его фильтр)"""
         async with async_session() as session:
+            # Проверяем через JOIN с UserFilter, чтобы найти объявления для этого пользователя
             result = await session.execute(
-                select(FoundCar).where(
-                    and_(FoundCar.source == source, FoundCar.ad_id == str(ad_id))
+                select(FoundCar).join(UserFilter).where(
+                    and_(
+                        FoundCar.source == source,
+                        FoundCar.ad_id == str(ad_id),
+                        UserFilter.user_id == user_id
+                    )
                 )
             )
             return result.scalar_one_or_none() is not None

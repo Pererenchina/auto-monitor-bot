@@ -96,30 +96,31 @@ class BaseParser(ABC):
         Returns:
             Кортеж (price_usd, price_byn) после нормализации
         """
-        # Конвертация валют, если одна из цен отсутствует (примерный курс: 1 USD = 3.3 BYN)
+        # Конвертация валют, если одна из цен отсутствует (курс: 1 USD = 2.9 BYN)
+        EXCHANGE_RATE = 2.9
         if price_usd and not price_byn:
             if validate:
                 if price_usd < 1000000:  # Проверка на разумность (максимум 1 млн USD)
-                    price_byn = round(price_usd * 3.3, 0)
+                    price_byn = round(price_usd * EXCHANGE_RATE, 0)
                 else:
                     logger.warning(f"Подозрительно большая цена USD: {price_usd}, пропускаем конвертацию")
                     price_usd = None
             else:
-                price_byn = round(price_usd * 3.3, 0)
+                price_byn = round(price_usd * EXCHANGE_RATE, 0)
         elif price_byn and not price_usd:
             if validate:
-                if price_byn < 10000000:  # Проверка на разумность (максимум 10 млн BYN)
-                    price_usd = round(price_byn / 3.3, 0)
+                if price_byn < 50000000:  # Проверка на разумность (максимум 50 млн BYN)
+                    price_usd = round(price_byn / EXCHANGE_RATE, 0)
                 else:
                     logger.warning(f"Подозрительно большая цена BYN: {price_byn}, пропускаем конвертацию")
                     price_byn = None
             else:
-                price_usd = round(price_byn / 3.3, 0)
+                price_usd = round(price_byn / EXCHANGE_RATE, 0)
         
         # Дополнительная проверка: если обе цены есть, но они несоответствуют курсу - исправляем
         if price_usd and price_byn and validate:
-            expected_byn = price_usd * 3.3
-            expected_usd = price_byn / 3.3
+            expected_byn = price_usd * EXCHANGE_RATE
+            expected_usd = price_byn / EXCHANGE_RATE
             # Если разница больше 15%, вероятно ошибка парсинга
             usd_diff = abs(price_usd - expected_usd) / max(price_usd, 1)
             byn_diff = abs(price_byn - expected_byn) / max(expected_byn, 1)
@@ -130,12 +131,12 @@ class BaseParser(ABC):
                 if usd_diff < byn_diff:
                     # USD более точная, пересчитываем BYN
                     old_byn = price_byn
-                    price_byn = round(price_usd * 3.3, 0)
+                    price_byn = round(price_usd * EXCHANGE_RATE, 0)
                     logger.info(f"Исправлена цена BYN: {price_byn} (было {old_byn})")
                 else:
                     # BYN более точная, пересчитываем USD
                     old_usd = price_usd
-                    price_usd = round(price_byn / 3.3, 0)
+                    price_usd = round(price_byn / EXCHANGE_RATE, 0)
                     logger.info(f"Исправлена цена USD: {price_usd} (было {old_usd})")
         
         return price_usd, price_byn
